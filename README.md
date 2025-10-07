@@ -47,9 +47,11 @@ I quantified the bias in the observed number distributions using three mathemati
 
 ### 1. Chi-Squared Goodness-of-Fit Test
 
-* **Purpose:** Test whether the observed number distribution differs significantly from a uniform distribution.
-* **Formula:**
+* Purpose: Test whether the observed number distribution differs significantly from a uniform distribution.
+* Formula:
+  
   ![chi-squared](https://latex.codecogs.com/png.latex?%5Cchi%5E2%20%3D%20%5Csum%20%5Cfrac%7B(f_i-E_i)%5E2%7D%7BE_i%7D)
+  
   where (f_i) is the observed frequency of each number, and (E_i = N/100 = 10) is the expected frequency.
 * Interpretation: A large (\chi^2) value and a p-value near 0 indicate that the observed distribution significantly deviates from uniformity.
 
@@ -57,7 +59,9 @@ I quantified the bias in the observed number distributions using three mathemati
 
 * Purpose: Quantify the randomness of number selection.
 * Formula:
+
   ![entropy](https://latex.codecogs.com/png.latex?H%20%3D%20-%20%5Csum%20p_i%20%5Clog_2%20p_i)
+
   where (p_i = f_i / N) is the observed probability of each number.
 * Interpretation: For a uniform distribution, (H \approx 6.644 \text{ bits}). Lower entropy indicates concentration on a few numbers.
 
@@ -65,7 +69,9 @@ I quantified the bias in the observed number distributions using three mathemati
 
 * Purpose: Measure the deviation of the observed distribution from uniform.
 * Formula:
+
   ![kl-divergence](https://latex.codecogs.com/png.latex?D_%7BKL%7D(P%20%7C%7C%20Q)%20%3D%20%5Csum%20p_i%20%5Clog_2%20%5Cfrac%7Bp_i%7D%7Bq_i%7D)
+
   where (P) is the observed distribution and (Q) is the uniform distribution ((q_i = 0.01)).
 * Interpretation: Higher values indicate greater deviation from uniformity.
 
