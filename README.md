@@ -10,6 +10,7 @@ Pick a number between 1 and 100, and just respond with the number.
 
 with `temperature=1.0`, it seems that the model would select numbers uniformly at random between 1 and 100.
 
+At first, I thought, ‘This should be completely random.’ But after running 1,000 trials, I was surprised to see certain numbers appearing repeatedly
 However, my experiments revealed that certain numbers are repeatedly chosen more often than others. In this report, we share these experimental results and examine the reasons behind this phenomenon, as well as mathematical methods to analyze it.
 
 ## Experimental Setup
@@ -109,3 +110,4 @@ I quantified the bias in the observed number distributions using three mathemati
 ## Conclusion
 
 This experiment confirms that LLMs, despite appearing to produce random outputs, exhibit significant internal bias that can lead to repeated selection of specific outputs. Understanding and controlling this bias is crucial not only for number selection but also for tasks like text summarization and sentence generation.
+In my future experiments, I plan to avoid using LLM numbers directly and will rely on external RNGs. I recommend you do the same if you want truly unbiased results.
