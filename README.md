@@ -2,16 +2,16 @@
 
 ## Introduction
 
-When interacting with large language models (LLMs), it is common to assume that they produce "random" outputs. For instance, when using a prompt like:
+When interacting with LLMs, it is common to assume that they produce "random" outputs. For example, when using a prompt like:
 
 ```
 Pick a number between 1 and 100, and just respond with the number.
 ```
 
-with `temperature=1.0`, it seems that the model would select numbers uniformly at random between 1 and 100.
+with `temperature=1.0`, it seems that the model would select numbers randomly between 1 and 100.
 
-At first, I thought, ‘This should be completely random.’ But after running 1,000 trials, I was surprised to see certain numbers appearing repeatedly
-However, my experiments revealed that certain numbers are repeatedly chosen more often than others. In this report, we share these experimental results and examine the reasons behind this phenomenon, as well as mathematical methods to analyze it.
+At first, I thought ‘This should be completely random.’ But after running 1,000 trials, I was surprised to see certain numbers appearing repeatedly.
+However, my experiments revealed that certain numbers are repeatedly chosen more often than others. In this report, we share these experimental results and examine the reasons behind this phenomenon.
 
 ## Experimental Setup
 
@@ -20,7 +20,7 @@ However, my experiments revealed that certain numbers are repeatedly chosen more
 * Sampling parameters: `temperature = 1.0`
 * Repetitions: 1,000 times per model
 
-For each API call, I recorded the number returned by the model and excluded any non-numeric responses. We then aggregated the frequency of each number and compared it against the expected uniform distribution (expected frequency for each number = 10).
+For each API call, I recorded the number returned by the model. 
 
 ## Observed Results
 
@@ -30,17 +30,11 @@ All three models exhibited noticeable bias toward certain numbers. Visualizing t
 
 Even though LLM outputs appear “random,” several factors contribute to the observed bias:
 
-1. **Tokenizer Effects**
-   Models tokenize numbers as text. For example, `7` may be represented as a single token, while `42` might require two tokens. Probability distributions at the token level do not necessarily translate to uniform probabilities at the number level, which can make certain numbers more likely to be chosen.
-
-2. **Training Data Bias**
+1. **Training Data Bias**
    LLMs are trained on large corpora of web text, documents, and code. Numbers that appear more frequently in the training data may have higher selection probabilities.
 
-3. **Decoding Methods**
+2. **Decoding Methods**
    Sampling methods such as temperature, top-p, and top-k do not guarantee uniform selection at the number level. Even with `temperature=1.0`, token-level sampling probabilities may remain uneven.
-
-4. **Prompt Design**
-   Natural language prompts like “Pick a number” can encourage the model to follow patterns that were common in the training data, leading to preference for certain numbers.
 
 ## Mathematical Analysis of LLM Number Selection
 
