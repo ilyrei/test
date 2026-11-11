@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         int p = (int)(16 * getResources().getDisplayMetrics().density);
         root.setPadding(p,p,p,p);
         TextView title = new TextView(this);
-        title.setText("Codex 칠판 호환성 진단 v0.4"); title.setTextSize(24);
+        title.setText("Codex 칠판 호환성 진단 v0.5"); title.setTextSize(24);
         root.addView(title);
         TextView explanation = new TextView(this);
         explanation.setText("공식 Codex 실행 파일과 이 기기의 기본 환경을 확인합니다. 로그인이나 질문 전송은 하지 않습니다.");
@@ -55,7 +55,7 @@ public final class MainActivity extends Activity {
     }
     private void log(String s) { main.post(() -> { report.append(s).append('\n'); output.setText(report.toString()); }); }
     private void diagnose() {
-        log("진단 앱 버전: 0.4");
+        log("진단 앱 버전: 0.5");
         log("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
         log("CPU ABI: " + Arrays.toString(Build.SUPPORTED_ABIS));
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();

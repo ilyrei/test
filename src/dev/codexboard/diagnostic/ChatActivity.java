@@ -20,6 +20,7 @@ public final class ChatActivity extends Activity {
     private final Map<Integer,String> pending = new ConcurrentHashMap<>();
     private final List<String> modelIds = new ArrayList<>();
     private Process process;
+    private LocalConnectProxy proxy;
     private BufferedWriter writer;
     private TextView status, transcript;
     private EditText input;
@@ -34,7 +35,7 @@ public final class ChatActivity extends Activity {
         super.onCreate(state);
         LinearLayout root=new LinearLayout(this); root.setOrientation(1);
         int pad=(int)(12*getResources().getDisplayMetrics().density); root.setPadding(pad,pad,pad,pad);
-        TextView heading=new TextView(this); heading.setText("Codex 로그인·대화 시험 v0.4"); heading.setTextSize(22); root.addView(heading);
+        TextView heading=new TextView(this); heading.setText("Codex 로그인·대화 시험 v0.5"); heading.setTextSize(22); root.addView(heading);
         status=new TextView(this); status.setText("앱 서버 시작 중…"); status.setTextSize(16); root.addView(status);
         LinearLayout row=new LinearLayout(this);
         login=new Button(this); login.setText("ChatGPT 로그인"); row.addView(login);
@@ -54,12 +55,29 @@ public final class ChatActivity extends Activity {
             for(File dir:new File[]{home,codex,tmp,workspace}) if(!dir.isDirectory()&&!dir.mkdirs()) throw new IOException("작업 폴더 생성 실패");
             ProcessBuilder b=new ProcessBuilder(new File(getApplicationInfo().nativeLibraryDir,"libcodex.so").getAbsolutePath()).directory(workspace);
             b.environment().put("HOME",home.getAbsolutePath()); b.environment().put("CODEX_HOME",codex.getAbsolutePath()); b.environment().put("TMPDIR",tmp.getAbsolutePath());
+            File certFile = writeSystemCertificates();
+            proxy = new LocalConnectProxy();
+            b.environment().put("HTTPS_PROXY",proxy.url()); b.environment().put("https_proxy",proxy.url());
+            b.environment().put("SSL_CERT_FILE",certFile.getAbsolutePath()); b.environment().put("CODEX_CA_CERTIFICATE",certFile.getAbsolutePath());
             process=b.start(); writer=new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),"UTF-8"));
             Thread stderr=new Thread(() -> { try { byte[] bytes=new byte[4096]; while(process.getErrorStream().read(bytes)!=-1) {} } catch(IOException ignored){} },"codex-stderr"); stderr.setDaemon(true); stderr.start();
             Thread reader=new Thread(() -> { try { BufferedReader in=new BufferedReader(new InputStreamReader(process.getInputStream(),"UTF-8")); String line; while((line=in.readLine())!=null) handle(new JSONObject(line)); } catch(Exception e) { updateStatus("서버 연결 종료: "+e.getClass().getSimpleName()); } finally { ready=false; refresh(); } },"codex-rpc"); reader.setDaemon(true); reader.start();
-            JSONObject client=obj("name","codex_board"); client.put("version","0.4");
+            JSONObject client=obj("name","codex_board"); client.put("version","0.5");
             request("initialize",new JSONObject().put("clientInfo",client),"initialize");
         } catch(Exception e) { updateStatus("서버 시작 실패: "+e.getClass().getSimpleName()+": "+e.getMessage()); }
+    }
+    private File writeSystemCertificates() throws Exception {
+        java.security.KeyStore store=java.security.KeyStore.getInstance("AndroidCAStore"); store.load(null);
+        File file=new File(getFilesDir(),"system-ca-bundle.pem"); int count=0;
+        try(Writer out=new OutputStreamWriter(new FileOutputStream(file),"US-ASCII")) {
+            java.util.Enumeration<String> aliases=store.aliases();
+            while(aliases.hasMoreElements()) { String alias=aliases.nextElement(); if(!alias.startsWith("system:"))continue;
+                java.security.cert.Certificate cert=store.getCertificate(alias); if(cert==null)continue;
+                out.write("-----BEGIN CERTIFICATE-----\n"); out.write(java.util.Base64.getMimeEncoder(64,new byte[]{'\n'}).encodeToString(cert.getEncoded())); out.write("\n-----END CERTIFICATE-----\n"); count++;
+            }
+        }
+        if(count==0) throw new IOException("시스템 인증서를 찾지 못했습니다");
+        return file;
     }
     private synchronized void write(JSONObject msg) throws Exception { if(writer==null) throw new IOException("서버가 실행되지 않음"); writer.write(msg.toString()); writer.newLine(); writer.flush(); }
     private synchronized void request(String method, JSONObject params, String kind) {
@@ -109,5 +127,5 @@ public final class ChatActivity extends Activity {
     private void updateStatus(String s){main.post(()->status.setText(s));}
     private void append(String s){main.post(()->{ transcript.append(s); if(transcript.length()>120000)transcript.setText(transcript.getText().subSequence(transcript.length()-100000,transcript.length())); });}
     private void refresh(){main.post(()->{login.setEnabled(ready&&!loggedIn);send.setEnabled(ready&&loggedIn&&!busy);});}
-    @Override public void onDestroy(){ if(process!=null)process.destroy(); worker.shutdownNow(); super.onDestroy(); }
+    @Override public void onDestroy(){ if(process!=null)process.destroy(); if(proxy!=null)try{proxy.close();}catch(IOException ignored){} worker.shutdownNow(); super.onDestroy(); }
 }
