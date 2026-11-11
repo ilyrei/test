@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SDK_DIR="${ANDROID_SDK_ROOT:-/workspace/android-tools}"
-BIN_PATH="${CODEX_BINARY:-/workspace/downloads/codex-aarch64-unknown-linux-musl}"
+BIN_PATH="${CODEX_BINARY:-/workspace/downloads/codex-app-server-aarch64-unknown-linux-musl}"
 BUILD_TOOLS="$SDK_DIR/build-tools/35.0.0"
 ANDROID_JAR="$SDK_DIR/platforms/android-30/android.jar"
 BUILD_DIR="$ROOT_DIR/build"

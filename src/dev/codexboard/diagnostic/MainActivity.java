@@ -61,22 +61,28 @@ public final class MainActivity extends Activity {
         File binary = new File(getApplicationInfo().nativeLibraryDir, "libcodex.so");
         log("Codex 실행 파일: " + (binary.isFile() ? "설치됨 (" + binary.length()/1048576 + " MiB)" : "찾지 못함"));
         try {
-            Process p = new ProcessBuilder(binary.getAbsolutePath(), "--version").redirectErrorStream(true).start();
+            Process p = prepareProcess(binary, "--version").redirectErrorStream(true).start();
             FutureTask<String> read = new FutureTask<>(() -> readLimited(p.getInputStream()));
             new Thread(read,"version-reader").start();
             if (!p.waitFor(15, TimeUnit.SECONDS)) { p.destroyForcibly(); log("버전 실행: 15초 시간 초과"); }
             else log("버전 실행: 종료 코드 " + p.exitValue() + "\n" + read.get(2,TimeUnit.SECONDS));
         } catch (Exception e) { log("버전 실행 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
         try {
-            Process p = new ProcessBuilder(binary.getAbsolutePath()).directory(getFilesDir()).start();
+            Process p = prepareProcess(binary).start();
             FutureTask<String> read = new FutureTask<>(() -> { BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream(),"UTF-8")); return b.readLine(); });
             Thread t = new Thread(read,"rpc-reader"); t.setDaemon(true); t.start();
+            FutureTask<String> errors = new FutureTask<>(() -> readLimited(p.getErrorStream()));
+            Thread errorThread = new Thread(errors,"stderr-reader"); errorThread.setDaemon(true); errorThread.start();
             try {
                 JSONObject info = new JSONObject().put("name","codex-board-diagnostic").put("version","0.1.0");
                 JSONObject msg = new JSONObject().put("id",1).put("method","initialize").put("params",new JSONObject().put("clientInfo",info));
                 p.getOutputStream().write((msg.toString()+"\n").getBytes("UTF-8")); p.getOutputStream().flush();
                 String line = read.get(15,TimeUnit.SECONDS);
-                if (line == null) log("App-server 초기화 실패: 응답 없이 종료됨");
+                if (line == null) {
+                    boolean exited = p.waitFor(2, TimeUnit.SECONDS);
+                    log("App-server 초기화 실패: 응답 없이 종료됨" + (exited ? " (종료 코드 " + p.exitValue() + ")" : ""));
+                    if (exited) { String detail = errors.get(2, TimeUnit.SECONDS); if (!detail.isEmpty()) log("오류 상세:\n" + detail); }
+                }
                 else { JSONObject response = new JSONObject(line); log("App-server 초기화: " + (response.has("result") ? "성공" : "실패: " + response.optString("error"))); }
             } finally { p.destroyForcibly(); }
         } catch (Exception e) { log("App-server 초기화 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
@@ -88,6 +94,20 @@ public final class MainActivity extends Activity {
             HttpsURLConnectionCompat.check(); log("Android HTTPS: 연결 성공");
         } catch (Exception e) { log("Android HTTPS 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
         log("진단 완료. 결과를 복사해 전달해주세요. 이 결과만으로 로그인·파일 수정 성공을 보장할 수 없습니다.");
+    }
+    private ProcessBuilder prepareProcess(File binary, String... args) throws IOException {
+        File homeDir = new File(getFilesDir(), "home");
+        File codexDir = new File(homeDir, ".codex");
+        File tmpDir = new File(getCacheDir(), "tmp");
+        if ((!homeDir.isDirectory() && !homeDir.mkdirs()) || (!codexDir.isDirectory() && !codexDir.mkdirs()) || (!tmpDir.isDirectory() && !tmpDir.mkdirs())) throw new IOException("앱 전용 폴더 생성 실패");
+        java.util.ArrayList<String> command = new java.util.ArrayList<>();
+        command.add(binary.getAbsolutePath());
+        java.util.Collections.addAll(command, args);
+        ProcessBuilder builder = new ProcessBuilder(command).directory(getFilesDir());
+        builder.environment().put("HOME", homeDir.getAbsolutePath());
+        builder.environment().put("CODEX_HOME", codexDir.getAbsolutePath());
+        builder.environment().put("TMPDIR", tmpDir.getAbsolutePath());
+        return builder;
     }
     private static String readLimited(InputStream input) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream(); byte[] b = new byte[4096]; int n;
