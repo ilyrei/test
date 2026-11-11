@@ -11,7 +11,7 @@ test -f "$ANDROID_JAR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR/classes" "$BUILD_DIR/dex" "$BUILD_DIR/apk/lib/arm64-v8a" "$BUILD_DIR/apk/assets" "$BUILD_DIR/empty-res" "$ROOT_DIR/dist"
 "$BUILD_TOOLS/aapt2" link -I "$ANDROID_JAR" --manifest "$ROOT_DIR/AndroidManifest.xml" -o "$BUILD_DIR/base.apk"
-javac --release 8 -classpath "$ANDROID_JAR" -d "$BUILD_DIR/classes" "$ROOT_DIR/src/dev/codexboard/diagnostic/MainActivity.java"
+javac --release 8 -classpath "$ANDROID_JAR" -d "$BUILD_DIR/classes" "$ROOT_DIR/src/dev/codexboard/diagnostic/"*.java
 "$BUILD_TOOLS/d8" --min-api 30 --lib "$ANDROID_JAR" --output "$BUILD_DIR/dex" "$BUILD_DIR/classes/dev/codexboard/diagnostic/"*.class
 cp "$BIN_PATH" "$BUILD_DIR/apk/lib/arm64-v8a/libcodex.so"
 cp "$BUILD_DIR/dex/classes.dex" "$BUILD_DIR/apk/classes.dex"

@@ -1,12 +1,12 @@
 # Codex 칠판 호환성 진단
 
-Android 11 ARM64 기기에서 공식 Codex CLI 실행 파일의 기동 가능성을 점검하는 **초기 진단 APK**다. 채팅, 로그인, 파일 편집 및 명령 실행 기능은 아직 구현되지 않았다. 이 진단이 통과하더라도 Android 호환성, 로그인, 샌드박스와 명령 실행은 별도 검증이 필요하다.
+Android 11 ARM64 기기에서 공식 Codex app-server 실행을 점검하는 **시험 APK**다. 버전 0.4에는 ChatGPT 기기 코드 로그인과 텍스트 대화 실험이 포함되어 있지만 실제 기기에서 아직 검증되지 않았다. 파일 편집과 명령 실행은 지원하지 않는다.
 
 1. `dist/codex-board-diagnostic.apk`를 설치한다.
 2. 앱을 열어 `진단 시작`을 누르고 완료될 때까지 기다린다.
 3. `결과 복사`를 눌러 진단 결과를 전달한다.
 
-앱은 Android 시스템의 DNS 및 HTTPS 연결을 확인한다. 이는 Codex 자체의 DNS 또는 로그인 성공 여부를 보장하지 않는다. 진단은 계정 로그인, 토큰 또는 사용자 파일에 접근하지 않는다.
+진단 화면은 Android 시스템의 DNS 및 HTTPS 연결을 확인한다. 이는 Codex 자체의 DNS 또는 로그인 성공 여부를 보장하지 않는다. 로그인·대화 시험 화면은 사용자가 로그인할 때 Codex의 계정 인증 정보를 앱 전용 저장소에 저장한다.
 
 Codex 실행 파일: OpenAI Codex app-server `rust-v0.167.1`, 공식 `aarch64-unknown-linux-musl` 배포본. Android용 공식 배포본이 아니며 실행 가능성은 미검증이다. 소스와 라이선스: https://github.com/openai/codex/tree/rust-v0.167.1
 

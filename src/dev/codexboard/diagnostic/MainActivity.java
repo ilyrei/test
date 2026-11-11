@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         int p = (int)(16 * getResources().getDisplayMetrics().density);
         root.setPadding(p,p,p,p);
         TextView title = new TextView(this);
-        title.setText("Codex 칠판 호환성 진단 v0.3"); title.setTextSize(24);
+        title.setText("Codex 칠판 호환성 진단 v0.4"); title.setTextSize(24);
         root.addView(title);
         TextView explanation = new TextView(this);
         explanation.setText("공식 Codex 실행 파일과 이 기기의 기본 환경을 확인합니다. 로그인이나 질문 전송은 하지 않습니다.");
@@ -44,6 +44,8 @@ public final class MainActivity extends Activity {
         Button copy = new Button(this); copy.setText("결과 복사");
         buttons.addView(run, new LinearLayout.LayoutParams(0,-2,1));
         buttons.addView(copy, new LinearLayout.LayoutParams(0,-2,1)); root.addView(buttons);
+        Button chat = new Button(this); chat.setText("로그인·대화 시험 열기"); root.addView(chat);
+        chat.setOnClickListener(v -> startActivity(new android.content.Intent(this, ChatActivity.class)));
         output = new TextView(this); output.setTextSize(16); output.setTextIsSelectable(true);
         ScrollView scroll = new ScrollView(this); scroll.addView(output); root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
@@ -53,7 +55,7 @@ public final class MainActivity extends Activity {
     }
     private void log(String s) { main.post(() -> { report.append(s).append('\n'); output.setText(report.toString()); }); }
     private void diagnose() {
-        log("진단 앱 버전: 0.3");
+        log("진단 앱 버전: 0.4");
         log("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
         log("CPU ABI: " + Arrays.toString(Build.SUPPORTED_ABIS));
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
