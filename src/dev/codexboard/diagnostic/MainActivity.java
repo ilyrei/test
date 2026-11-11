@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         int p = (int)(16 * getResources().getDisplayMetrics().density);
         root.setPadding(p,p,p,p);
         TextView title = new TextView(this);
-        title.setText("Codex 칠판 호환성 진단"); title.setTextSize(24);
+        title.setText("Codex 칠판 호환성 진단 v0.3"); title.setTextSize(24);
         root.addView(title);
         TextView explanation = new TextView(this);
         explanation.setText("공식 Codex 실행 파일과 이 기기의 기본 환경을 확인합니다. 로그인이나 질문 전송은 하지 않습니다.");
@@ -53,6 +53,7 @@ public final class MainActivity extends Activity {
     }
     private void log(String s) { main.post(() -> { report.append(s).append('\n'); output.setText(report.toString()); }); }
     private void diagnose() {
+        log("진단 앱 버전: 0.3");
         log("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
         log("CPU ABI: " + Arrays.toString(Build.SUPPORTED_ABIS));
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
@@ -81,10 +82,14 @@ public final class MainActivity extends Activity {
                 if (line == null) {
                     boolean exited = p.waitFor(2, TimeUnit.SECONDS);
                     log("App-server 초기화 실패: 응답 없이 종료됨" + (exited ? " (종료 코드 " + p.exitValue() + ")" : ""));
-                    if (exited) { String detail = errors.get(2, TimeUnit.SECONDS); if (!detail.isEmpty()) log("오류 상세:\n" + detail); }
                 }
                 else { JSONObject response = new JSONObject(line); log("App-server 초기화: " + (response.has("result") ? "성공" : "실패: " + response.optString("error"))); }
-            } finally { p.destroyForcibly(); }
+            } finally {
+                p.destroyForcibly();
+                p.waitFor(3, TimeUnit.SECONDS);
+                try { String detail = errors.get(3, TimeUnit.SECONDS); log(detail.isEmpty() ? "App-server 오류 출력: 없음" : "App-server 오류 상세:\n" + detail); }
+                catch (Exception e) { log("App-server 오류 출력 수집 실패: " + e.getClass().getSimpleName()); }
+            }
         } catch (Exception e) { log("App-server 초기화 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
         try {
             InetAddress[] hosts = InetAddress.getAllByName("auth.openai.com");
