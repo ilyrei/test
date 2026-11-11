@@ -58,9 +58,9 @@ public final class ChatActivity extends Activity {
         try {
             File home=new File(getFilesDir(),"home"), codex=new File(home,".codex"), tmp=new File(getCacheDir(),"tmp"), workspace=new File(getFilesDir(),"workspace");
             for(File dir:new File[]{home,codex,tmp,workspace}) if(!dir.isDirectory()&&!dir.mkdirs()) throw new IOException("작업 폴더 생성 실패");
-            ProcessBuilder b=new ProcessBuilder(new File(getApplicationInfo().nativeLibraryDir,"libcodex.so").getAbsolutePath()).directory(workspace);
+            ProcessBuilder b=new ProcessBuilder(new File(getApplicationInfo().nativeLibraryDir,"libcodex.so").getAbsolutePath(),"app-server").directory(workspace);
             b.environment().put("HOME",home.getAbsolutePath()); b.environment().put("CODEX_HOME",codex.getAbsolutePath()); b.environment().put("TMPDIR",tmp.getAbsolutePath());
-            File certFile = writeSystemCertificates();
+            File certFile = writeSystemCertificates(this);
             proxy = new LocalConnectProxy();
             b.environment().put("HTTPS_PROXY",proxy.url()); b.environment().put("https_proxy",proxy.url());
             b.environment().put("SSL_CERT_FILE",certFile.getAbsolutePath()); b.environment().put("CODEX_CA_CERTIFICATE",certFile.getAbsolutePath());
@@ -71,9 +71,9 @@ public final class ChatActivity extends Activity {
             request("initialize",new JSONObject().put("clientInfo",client),"initialize");
         } catch(Exception e) { updateStatus("서버 시작 실패: "+e.getClass().getSimpleName()+": "+e.getMessage()); }
     }
-    private File writeSystemCertificates() throws Exception {
+    static File writeSystemCertificates(android.content.Context context) throws Exception {
         java.security.KeyStore store=java.security.KeyStore.getInstance("AndroidCAStore"); store.load(null);
-        File file=new File(getFilesDir(),"system-ca-bundle.pem"); int count=0;
+        File file=new File(context.getFilesDir(),"system-ca-bundle.pem"); int count=0;
         try(Writer out=new OutputStreamWriter(new FileOutputStream(file),"US-ASCII")) {
             java.util.Enumeration<String> aliases=store.aliases();
             while(aliases.hasMoreElements()) { String alias=aliases.nextElement(); if(!alias.startsWith("system:"))continue;

@@ -1,2 +1,4 @@
 build/
 debug.keystore
+assembled/
+dist/*.idsig

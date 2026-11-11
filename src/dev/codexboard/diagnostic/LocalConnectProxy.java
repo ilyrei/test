@@ -14,7 +14,10 @@ final class LocalConnectProxy implements Closeable {
     private final ExecutorService handlers = Executors.newFixedThreadPool(8);
     private final String secret;
     private final String expectedAuth;
-    LocalConnectProxy() throws IOException {
+    private final boolean allowOtherHosts;
+    LocalConnectProxy() throws IOException { this(false); }
+    LocalConnectProxy(boolean allowOtherHosts) throws IOException {
+        this.allowOtherHosts = allowOtherHosts;
         byte[] random = new byte[24]; new SecureRandom().nextBytes(random);
         secret = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
         expectedAuth = "Basic " + Base64.getEncoder().encodeToString(("codex:" + secret).getBytes(StandardCharsets.US_ASCII));
@@ -38,7 +41,7 @@ final class LocalConnectProxy implements Closeable {
             if(request.length<2||!"CONNECT".equals(request[0])) return;
             String[] target=request[1].split(":",-1); if(target.length!=2||!"443".equals(target[1]))return;
             String host=target[0].toLowerCase(Locale.ROOT);
-            if(!(host.equals("openai.com")||host.endsWith(".openai.com")||host.equals("chatgpt.com")||host.endsWith(".chatgpt.com"))) return;
+            if(!allowOtherHosts&&!(host.equals("openai.com")||host.endsWith(".openai.com")||host.equals("chatgpt.com")||host.endsWith(".chatgpt.com"))) return;
             try(Socket upstream=new Socket()) {
                 upstream.connect(new InetSocketAddress(host,443),15000); c.setSoTimeout(0);
                 out.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes(StandardCharsets.US_ASCII)); out.flush();

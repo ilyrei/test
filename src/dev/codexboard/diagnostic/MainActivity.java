@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         int p = (int)(16 * getResources().getDisplayMetrics().density);
         root.setPadding(p,p,p,p);
         TextView title = new TextView(this);
-        title.setText("Codex 칠판 호환성 진단 v0.6"); title.setTextSize(24);
+        title.setText("Codex 칠판 v0.7 시험판"); title.setTextSize(24);
         root.addView(title);
         TextView explanation = new TextView(this);
         explanation.setText("공식 Codex 실행 파일과 이 기기의 기본 환경을 확인합니다. 로그인이나 질문 전송은 하지 않습니다.");
@@ -46,6 +46,8 @@ public final class MainActivity extends Activity {
         buttons.addView(copy, new LinearLayout.LayoutParams(0,-2,1)); root.addView(buttons);
         Button chat = new Button(this); chat.setText("로그인·대화 시험 열기"); root.addView(chat);
         chat.setOnClickListener(v -> startActivity(new android.content.Intent(this, ChatActivity.class)));
+        Button terminal = new Button(this); terminal.setText("원본 Codex 터미널 열기"); root.addView(terminal);
+        terminal.setOnClickListener(v -> startActivity(new android.content.Intent(this, TerminalActivity.class)));
         output = new TextView(this); output.setTextSize(16); output.setTextIsSelectable(true);
         ScrollView scroll = new ScrollView(this); scroll.addView(output); root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root);
@@ -55,7 +57,7 @@ public final class MainActivity extends Activity {
     }
     private void log(String s) { main.post(() -> { report.append(s).append('\n'); output.setText(report.toString()); }); }
     private void diagnose() {
-        log("진단 앱 버전: 0.6");
+        log("진단 앱 버전: 0.7");
         log("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
         log("CPU ABI: " + Arrays.toString(Build.SUPPORTED_ABIS));
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
@@ -71,7 +73,7 @@ public final class MainActivity extends Activity {
             else log("버전 실행: 종료 코드 " + p.exitValue() + "\n" + read.get(2,TimeUnit.SECONDS));
         } catch (Exception e) { log("버전 실행 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
         try {
-            Process p = prepareProcess(binary).start();
+            Process p = prepareProcess(binary, "app-server").start();
             FutureTask<String> read = new FutureTask<>(() -> { BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream(),"UTF-8")); return b.readLine(); });
             Thread t = new Thread(read,"rpc-reader"); t.setDaemon(true); t.start();
             FutureTask<String> errors = new FutureTask<>(() -> readLimited(p.getErrorStream()));
