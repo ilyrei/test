@@ -68,7 +68,7 @@ public final class MainActivity extends Activity {
             else log("버전 실행: 종료 코드 " + p.exitValue() + "\n" + read.get(2,TimeUnit.SECONDS));
         } catch (Exception e) { log("버전 실행 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
         try {
-            Process p = new ProcessBuilder(binary.getAbsolutePath(), "app-server").directory(getFilesDir()).start();
+            Process p = new ProcessBuilder(binary.getAbsolutePath()).directory(getFilesDir()).start();
             FutureTask<String> read = new FutureTask<>(() -> { BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream(),"UTF-8")); return b.readLine(); });
             Thread t = new Thread(read,"rpc-reader"); t.setDaemon(true); t.start();
             try {
