@@ -25,28 +25,33 @@ public final class ChatActivity extends Activity {
     private TextView status, transcript;
     private EditText input;
     private Spinner models;
-    private Button login, send;
+    private Button login, send, newChat;
     private int nextId = 1;
-    private volatile boolean ready, loggedIn, busy;
+    private volatile boolean ready, loggedIn, busy, restoring, resumeFailed, closing;
     private volatile String threadId;
-    private String pendingText;
+    private volatile String accountKey;
+    private String pendingText, pendingModel;
+    private final Runnable saveTask = this::saveSession;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         LinearLayout root=new LinearLayout(this); root.setOrientation(1);
         int pad=(int)(12*getResources().getDisplayMetrics().density); root.setPadding(pad,pad,pad,pad);
-        TextView heading=new TextView(this); heading.setText("Codex 로그인·대화 시험 v0.5"); heading.setTextSize(22); root.addView(heading);
+        TextView heading=new TextView(this); heading.setText("Codex 로그인·대화 시험 v0.6"); heading.setTextSize(22); root.addView(heading);
         status=new TextView(this); status.setText("앱 서버 시작 중…"); status.setTextSize(16); root.addView(status);
         LinearLayout row=new LinearLayout(this);
         login=new Button(this); login.setText("ChatGPT 로그인"); row.addView(login);
-        models=new Spinner(this); row.addView(models,new LinearLayout.LayoutParams(0,-2,1)); root.addView(row);
+        models=new Spinner(this); row.addView(models,new LinearLayout.LayoutParams(0,-2,1));
+        newChat=new Button(this); newChat.setText("새 대화"); row.addView(newChat); root.addView(row);
         transcript=new TextView(this); transcript.setTextSize(18); transcript.setTextIsSelectable(true);
         ScrollView scroll=new ScrollView(this); scroll.addView(transcript); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         input=new EditText(this); input.setHint("질문을 입력하세요"); input.setMinLines(2); root.addView(input);
         send=new Button(this); send.setText("전송"); root.addView(send); setContentView(root);
         login.setEnabled(false); send.setEnabled(false);
+        newChat.setEnabled(false);
         login.setOnClickListener(v -> worker.execute(() -> request("account/login/start", obj("type","chatgptDeviceCode"), "login")));
-        send.setOnClickListener(v -> { String text=input.getText().toString().trim(); if(text.isEmpty()||busy)return; input.setText(""); append("\n나: "+text+"\nCodex: "); busy=true; refresh(); worker.execute(() -> startTurn(text)); });
+        newChat.setOnClickListener(v -> new AlertDialog.Builder(this).setMessage("현재 대화 화면을 닫고 새 대화를 시작할까요?").setPositiveButton("새 대화",(d,w)->{ main.removeCallbacks(saveTask); if(accountKey!=null)getPreferences(MODE_PRIVATE).edit().remove(accountKey+".thread").remove(accountKey+".text").apply(); threadId=null; resumeFailed=false; transcript.setText(""); updateStatus("새 대화를 시작하세요."); refresh(); }).setNegativeButton("취소",null).show());
+        send.setOnClickListener(v -> { String text=input.getText().toString().trim(); if(text.isEmpty()||busy||restoring||resumeFailed)return; int selected=models.getSelectedItemPosition(); String model=selected>=0&&selected<modelIds.size()?modelIds.get(selected):null; input.setText(""); append("\n나: "+text+"\nCodex: "); busy=true; refresh(); worker.execute(() -> startTurn(text,model)); });
         worker.execute(this::startServer);
     }
     private void startServer() {
@@ -61,8 +66,8 @@ public final class ChatActivity extends Activity {
             b.environment().put("SSL_CERT_FILE",certFile.getAbsolutePath()); b.environment().put("CODEX_CA_CERTIFICATE",certFile.getAbsolutePath());
             process=b.start(); writer=new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),"UTF-8"));
             Thread stderr=new Thread(() -> { try { byte[] bytes=new byte[4096]; while(process.getErrorStream().read(bytes)!=-1) {} } catch(IOException ignored){} },"codex-stderr"); stderr.setDaemon(true); stderr.start();
-            Thread reader=new Thread(() -> { try { BufferedReader in=new BufferedReader(new InputStreamReader(process.getInputStream(),"UTF-8")); String line; while((line=in.readLine())!=null) handle(new JSONObject(line)); } catch(Exception e) { updateStatus("서버 연결 종료: "+e.getClass().getSimpleName()); } finally { ready=false; refresh(); } },"codex-rpc"); reader.setDaemon(true); reader.start();
-            JSONObject client=obj("name","codex_board"); client.put("version","0.5");
+            Thread reader=new Thread(() -> { try { BufferedReader in=new BufferedReader(new InputStreamReader(process.getInputStream(),"UTF-8")); String line; while((line=in.readLine())!=null) handle(new JSONObject(line)); } catch(Exception ignored) { } finally { ready=false; if(!closing)updateStatus("서버 연결이 종료됐어요. 화면을 다시 열어주세요."); refresh(); } },"codex-rpc"); reader.setDaemon(true); reader.start();
+            JSONObject client=obj("name","codex_board"); client.put("version","0.6");
             request("initialize",new JSONObject().put("clientInfo",client),"initialize");
         } catch(Exception e) { updateStatus("서버 시작 실패: "+e.getClass().getSimpleName()+": "+e.getMessage()); }
     }
@@ -82,50 +87,73 @@ public final class ChatActivity extends Activity {
     private synchronized void write(JSONObject msg) throws Exception { if(writer==null) throw new IOException("서버가 실행되지 않음"); writer.write(msg.toString()); writer.newLine(); writer.flush(); }
     private synchronized void request(String method, JSONObject params, String kind) {
         try { int id=nextId++; pending.put(id,kind); write(new JSONObject().put("id",id).put("method",method).put("params",params)); }
-        catch(Exception e) { busy=false; updateStatus("요청 실패: "+e.getClass().getSimpleName()+": "+e.getMessage()); refresh(); }
+        catch(Exception e) { busy=false; if("resume".equals(kind)){restoring=false;resumeFailed=true;} updateStatus("요청 실패: "+e.getClass().getSimpleName()+": "+e.getMessage()); refresh(); }
     }
     private void handle(JSONObject msg) throws Exception {
         String method=msg.optString("method","");
         if(!method.isEmpty() && msg.has("id")) { write(new JSONObject().put("id",msg.get("id")).put("error",new JSONObject().put("code",-32601).put("message","This diagnostic client does not support tool approvals"))); updateStatus("명령 실행은 이 시험판에서 지원하지 않아요."); return; }
         if(msg.has("id")) {
             String kind=pending.remove(msg.optInt("id")); if(kind==null)return;
-            if(msg.has("error")) { busy=false; updateStatus("요청 실패 ("+kind+"): "+msg.optJSONObject("error").optString("message")); refresh(); return; }
+            if(msg.has("error")) { busy=false; if(kind.equals("resume")){restoring=false;resumeFailed=true;} JSONObject error=msg.optJSONObject("error"); updateStatus("요청 실패 ("+kind+"): "+(error==null?"알 수 없는 오류":error.optString("message"))); refresh(); return; }
             JSONObject result=msg.optJSONObject("result"); if(result==null)result=new JSONObject();
             switch(kind) {
                 case "initialize":
                     write(new JSONObject().put("method","initialized").put("params",new JSONObject())); ready=true; refresh();
                     request("account/read",obj("refreshToken",false),"account"); request("model/list",obj("limit",20),"models"); break;
                 case "account":
-                    loggedIn=result.optJSONObject("account")!=null; updateStatus(loggedIn?"로그인됨":"로그인이 필요해요."); refresh(); break;
+                    JSONObject account=result.optJSONObject("account"); loggedIn=account!=null;
+                    if(loggedIn) { String email=account.optString("email",""); accountKey=accountKeyFor(email); restoring=true; main.post(this::restoreSession); }
+                    else { accountKey=null; restoring=false; updateStatus("로그인이 필요해요."); }
+                    refresh(); break;
                 case "login":
                     final String url=result.optString("verificationUrl"), code=result.optString("userCode");
                     if(!url.startsWith("https://auth.openai.com/")||code.isEmpty()) { updateStatus("기기 코드 로그인 응답을 확인할 수 없어요."); break; }
                     main.post(() -> new AlertDialog.Builder(this).setTitle("ChatGPT 로그인").setMessage("코드: "+code+"\n\n브라우저에서 로그인하고 이 코드를 입력하세요.").setPositiveButton("브라우저 열기",(d,w)->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)))).setNegativeButton("닫기",null).show()); break;
                 case "models":
-                    JSONArray data=result.optJSONArray("data"); final List<String> names=new ArrayList<>(), ids=new ArrayList<>();
-                    if(data!=null)for(int i=0;i<data.length();i++){JSONObject model=data.optJSONObject(i); if(model!=null){String id=model.optString("model",model.optString("id")); if(!id.isEmpty()){ids.add(id); names.add(model.optString("displayName",id));}}}
-                    main.post(() -> { modelIds.clear(); modelIds.addAll(ids); if(names.isEmpty()) names.add("기본 모델"); models.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names)); }); break;
+                    JSONArray data=result.optJSONArray("data"); final List<String> names=new ArrayList<>(), ids=new ArrayList<>(); int defaultIndex=0;
+                    if(data!=null)for(int i=0;i<data.length();i++){JSONObject model=data.optJSONObject(i); if(model!=null){String id=model.optString("model",model.optString("id")); if(!id.isEmpty()){if(model.optBoolean("isDefault"))defaultIndex=ids.size(); ids.add(id); names.add(model.optString("displayName",id));}}}
+                    final int initialSelection=defaultIndex;
+                    main.post(() -> { modelIds.clear(); modelIds.addAll(ids); if(names.isEmpty()) names.add("기본 모델"); models.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names)); models.setSelection(initialSelection); }); break;
                 case "thread":
                     JSONObject thread=result.optJSONObject("thread"); threadId=thread==null?null:thread.optString("id",null);
-                    if(threadId==null){busy=false;updateStatus("대화를 시작할 수 없어요.");refresh();} else sendTurn(pendingText); break;
+                    if(threadId==null){busy=false;updateStatus("대화를 시작할 수 없어요.");refresh();} else { main.post(this::saveSession); sendTurn(pendingText,pendingModel); } break;
+                case "resume":
+                    restoring=false; resumeFailed=false; updateStatus("이전 대화를 이어갑니다."); refresh(); break;
                 case "turn": break;
             }
             return;
         }
         JSONObject params=msg.optJSONObject("params"); if(params==null)params=new JSONObject();
-        if(method.equals("account/login/completed")) { if(params.optBoolean("success")){loggedIn=true;updateStatus("로그인 성공");request("model/list",obj("limit",20),"models");} else updateStatus("로그인 실패: "+params.optString("error")); refresh(); }
+        if(method.equals("account/login/completed")) { if(params.optBoolean("success")){updateStatus("로그인 확인 중…");request("account/read",obj("refreshToken",false),"account");request("model/list",obj("limit",20),"models");} else updateStatus("로그인 실패: "+params.optString("error")); refresh(); }
         else if(method.equals("item/agentMessage/delta")) append(params.optString("delta"));
-        else if(method.equals("turn/completed")) { JSONObject turn=params.optJSONObject("turn"); if(turn!=null&&!"completed".equals(turn.optString("status"))) append("\n[작업 상태: "+turn.optString("status")+" "+turn.optString("error")+"]"); busy=false; updateStatus("대화 완료"); refresh(); }
+        else if(method.equals("turn/completed")) { JSONObject turn=params.optJSONObject("turn"); boolean success=turn!=null&&"completed".equals(turn.optString("status")); if(!success) append("\n[작업 상태: "+(turn==null?"알 수 없음":turn.optString("status")+" "+turn.optString("error"))+"]"); busy=false; updateStatus(success?"대화 완료":"대화가 완료되지 않았어요."); main.post(this::saveSession); refresh(); }
         else if(method.equals("error")) updateStatus("서버 오류: "+params.optString("error"));
     }
-    private void startTurn(String text) {
-        try { if(threadId==null) { pendingText=text; JSONObject p=new JSONObject().put("cwd",new File(getFilesDir(),"workspace").getAbsolutePath()).put("approvalPolicy","on-request").put("sandbox","read-only"); main.post(() -> { int i=models.getSelectedItemPosition(); if(i>=0&&i<modelIds.size())try{p.put("model",modelIds.get(i));}catch(Exception ignored){} worker.execute(() -> request("thread/start",p,"thread")); }); } else sendTurn(text); }
+    private void startTurn(String text, String model) {
+        try { if(threadId==null) { pendingText=text; pendingModel=model; JSONObject p=new JSONObject().put("cwd",new File(getFilesDir(),"workspace").getAbsolutePath()).put("approvalPolicy","on-request").put("sandbox","read-only"); if(model!=null)p.put("model",model); request("thread/start",p,"thread"); } else sendTurn(text,model); }
         catch(Exception e){ busy=false;updateStatus("대화 시작 실패: "+e.getMessage());refresh(); }
     }
-    private void sendTurn(String text) { try { request("turn/start",new JSONObject().put("threadId",threadId).put("input",new JSONArray().put(new JSONObject().put("type","text").put("text",text))),"turn"); } catch(Exception e){busy=false;updateStatus("전송 실패: "+e.getMessage());refresh();} }
+    private void sendTurn(String text, String model) { try { JSONObject params=new JSONObject().put("threadId",threadId).put("input",new JSONArray().put(new JSONObject().put("type","text").put("text",text))); if(model!=null)params.put("model",model); request("turn/start",params,"turn"); } catch(Exception e){busy=false;updateStatus("전송 실패: "+e.getMessage());refresh();} }
+    private static String accountKeyFor(String email) {
+        if(email==null||email.trim().isEmpty())return null;
+        try { byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(email.trim().toLowerCase(java.util.Locale.ROOT).getBytes("UTF-8")); StringBuilder out=new StringBuilder("account."); for(byte b:hash)out.append(String.format(java.util.Locale.ROOT,"%02x",b&255)); return out.toString(); } catch(Exception e){return null;}
+    }
+    private void restoreSession() {
+        if(accountKey==null){restoring=false;updateStatus("로그인됨. 이 계정의 대화 자동 복원은 지원되지 않아요.");refresh();return;}
+        android.content.SharedPreferences prefs=getPreferences(MODE_PRIVATE);
+        String saved=prefs.getString(accountKey+".thread",null);
+        if(saved==null){restoring=false;updateStatus("로그인됨");refresh();return;}
+        transcript.setText(prefs.getString(accountKey+".text","")); threadId=saved; updateStatus("이전 대화를 불러오는 중…");
+        worker.execute(()->{try{request("thread/resume",new JSONObject().put("threadId",saved).put("excludeTurns",true),"resume");}catch(Exception e){restoring=false;resumeFailed=true;updateStatus("대화 복원 요청 실패");refresh();}});
+    }
+    private void saveSession() {
+        if(accountKey==null||threadId==null||resumeFailed)return;
+        getPreferences(MODE_PRIVATE).edit().putString(accountKey+".thread",threadId).putString(accountKey+".text",transcript.getText().toString()).apply();
+    }
     private static JSONObject obj(String key,Object value) { try{return new JSONObject().put(key,value);}catch(Exception e){return new JSONObject();} }
     private void updateStatus(String s){main.post(()->status.setText(s));}
-    private void append(String s){main.post(()->{ transcript.append(s); if(transcript.length()>120000)transcript.setText(transcript.getText().subSequence(transcript.length()-100000,transcript.length())); });}
-    private void refresh(){main.post(()->{login.setEnabled(ready&&!loggedIn);send.setEnabled(ready&&loggedIn&&!busy);});}
-    @Override public void onDestroy(){ if(process!=null)process.destroy(); if(proxy!=null)try{proxy.close();}catch(IOException ignored){} worker.shutdownNow(); super.onDestroy(); }
+    private void append(String s){main.post(()->{ transcript.append(s); if(transcript.length()>120000)transcript.setText(transcript.getText().subSequence(transcript.length()-100000,transcript.length())); main.removeCallbacks(saveTask); main.postDelayed(saveTask,800); });}
+    private void refresh(){main.post(()->{login.setEnabled(ready&&!loggedIn);send.setEnabled(ready&&loggedIn&&!busy&&!restoring&&!resumeFailed);newChat.setEnabled(ready&&loggedIn&&!busy&&!restoring);});}
+    @Override protected void onPause(){ main.removeCallbacks(saveTask); saveSession(); super.onPause(); }
+    @Override public void onDestroy(){ closing=true; main.removeCallbacks(saveTask); saveSession(); if(process!=null)process.destroy(); if(proxy!=null)try{proxy.close();}catch(IOException ignored){} worker.shutdownNow(); super.onDestroy(); }
 }
