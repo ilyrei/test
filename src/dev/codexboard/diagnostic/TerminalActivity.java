@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
+import android.graphics.Color;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
 import android.view.inputmethod.EditorInfo;
@@ -30,12 +32,15 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
     private LocalConnectProxy proxy;
     private TextView status;
     private EditText input;
+    private LinearLayout entry;
     private boolean ctrl;
     private volatile boolean transferring;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        getWindow().setStatusBarColor(Color.BLACK); getWindow().setNavigationBarColor(Color.BLACK);
+        getWindow().getDecorView().setSystemUiVisibility(0);
+        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(18,20,24));
         status=new TextView(this); status.setText("Codex CLI — 시작 전"); status.setTextSize(16); root.addView(status);
         HorizontalScrollView top=new HorizontalScrollView(this); LinearLayout buttons=new LinearLayout(this); top.addView(buttons); root.addView(top);
         button(buttons,"로그인·기존 대화",()->{if(session!=null&&session.isRunning()){status.setText("먼저 실행 중인 Codex를 중지하세요.");return;}startActivity(new Intent(this,ChatActivity.class));});
@@ -47,23 +52,26 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
         button(buttons,"가져오기",()->chooseFolder(101));
         button(buttons,"내보내기",()->chooseFolder(102));
         button(buttons,"키보드",this::showKeyboard);
+        button(buttons,"입력창",this::toggleInput);
         button(buttons,"Ctrl",()->{ctrl=!ctrl;status.setText(ctrl?"Ctrl: 다음 키에 적용":"Ctrl 해제");});
         button(buttons,"Esc",()->write("\u001b")); button(buttons,"Tab",()->write("\t"));
+        button(buttons,"⌫",()->write("\u007f")); button(buttons,"Enter",()->write("\r")); button(buttons,"Ctrl+C",()->write("\u0003"));
         button(buttons,"↑",()->write("\u001b[A")); button(buttons,"↓",()->write("\u001b[B"));
         button(buttons,"←",()->write("\u001b[D")); button(buttons,"→",()->write("\u001b[C"));
         button(buttons,"중지",()->{if(session!=null)session.finishIfRunning();});
         terminal=new TerminalView(this,null); terminal.setFocusable(true); terminal.setFocusableInTouchMode(true); terminal.setTerminalViewClient(this);
         terminal.setTextSize((int)(16*getResources().getDisplayMetrics().scaledDensity));
         root.addView(terminal,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout entry=new LinearLayout(this);
+        entry=new LinearLayout(this); entry.setVisibility(View.GONE);
         input=new EditText(this); input.setSingleLine(true); input.setTextSize(18); input.setHint("질문 또는 명령 입력"); input.setImeOptions(EditorInfo.IME_ACTION_SEND);
         entry.addView(input,new LinearLayout.LayoutParams(0,-2,1)); Button submit=new Button(this); submit.setText("전송"); entry.addView(submit); root.addView(entry);
         submit.setOnClickListener(v->sendInput()); input.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEND){sendInput();return true;}return false;});
         setContentView(root);
     }
-    private void button(LinearLayout parent,String label,Runnable action){Button b=new Button(this);b.setText(label);b.setOnClickListener(v->action.run());parent.addView(b);}
+    private void button(LinearLayout parent,String label,Runnable action){Button b=new Button(this);b.setText(label);b.setFocusable(false);b.setOnClickListener(v->action.run());parent.addView(b);}
     private void write(String value){if(session!=null)session.write(value);}
-    private void showKeyboard(){input.requestFocus();input.post(()->((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(input,InputMethodManager.SHOW_IMPLICIT));}
+    private void showKeyboard(){terminal.requestFocus();terminal.post(()->{InputMethodManager imm=(InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);imm.restartInput(terminal);imm.showSoftInput(terminal,InputMethodManager.SHOW_IMPLICIT);});}
+    private void toggleInput(){if(entry.getVisibility()==View.VISIBLE){entry.setVisibility(View.GONE);showKeyboard();}else{entry.setVisibility(View.VISIBLE);input.requestFocus();input.post(()->((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(input,InputMethodManager.SHOW_IMPLICIT));}}
     private void sendInput(){if(session==null||!session.isRunning()){status.setText("먼저 Codex를 시작하세요.");return;}String value=input.getText().toString();write(value+"\r");input.setText("");}
     private void chooseFolder(int code){
         if(transferring||(session!=null&&session.isRunning())){status.setText("먼저 실행 중인 Codex와 파일 작업을 중지하세요.");return;}
@@ -108,7 +116,7 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
     @Override public float onScale(float scale){return scale;}
     @Override public void onSingleTapUp(MotionEvent e){showKeyboard();}
     @Override public boolean shouldBackButtonBeMappedToEscape(){return false;}
-    @Override public boolean shouldEnforceCharBasedInput(){return false;}
+    @Override public boolean shouldEnforceCharBasedInput(){return true;}
     @Override public boolean shouldUseCtrlSpaceWorkaround(){return false;}
     @Override public boolean isTerminalViewSelected(){return terminal!=null&&terminal.hasFocus();}
     @Override public void copyModeChanged(boolean b){}
