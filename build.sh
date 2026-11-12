@@ -3,12 +3,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SDK_DIR="${ANDROID_SDK_ROOT:-/workspace/android-tools}"
 BIN_PATH="${CODEX_BINARY:-/workspace/downloads/codex-aarch64-unknown-linux-musl}"
+HOST_BIN_PATH="${CODEX_HOST_BINARY:-/workspace/downloads/codex-code-mode-host-aarch64-unknown-linux-musl}"
 ANNOTATION_JAR="${ANNOTATION_JAR:-/workspace/downloads/androidx-annotation.jar}"
 NDK_DIR="${ANDROID_NDK_ROOT:-$SDK_DIR/ndk/27.2.12479018}"
 BUILD_TOOLS="$SDK_DIR/build-tools/35.0.0"
 ANDROID_JAR="$SDK_DIR/platforms/android-35/android.jar"
 BUILD_DIR="$ROOT_DIR/build"
 test -f "$BIN_PATH"
+test -f "$HOST_BIN_PATH"
+printf '%s  %s\n' '8c3cc2490a29af4baa9dd8bc894812efaa735a033f55a840ee57b3decce73198' "$HOST_BIN_PATH" | sha256sum -c -
 test -f "$ANDROID_JAR"
 rm -rf "$BUILD_DIR"
 test -f "$ANNOTATION_JAR"
@@ -21,7 +24,9 @@ javac --release 8 -classpath "$ANDROID_JAR:$ANNOTATION_JAR" -d "$BUILD_DIR/class
 jar cf "$BUILD_DIR/classes.jar" -C "$BUILD_DIR/classes" .
 "$BUILD_TOOLS/d8" --min-api 30 --lib "$ANDROID_JAR" --classpath "$ANNOTATION_JAR" --output "$BUILD_DIR/dex" "$BUILD_DIR/classes.jar"
 "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang" -shared -fPIC -O2 "$ROOT_DIR/vendor/termux/terminal-emulator/src/main/jni/termux.c" -o "$BUILD_DIR/apk/lib/arm64-v8a/libtermux.so" -llog
-cp "$BIN_PATH" "$BUILD_DIR/apk/lib/arm64-v8a/libcodex.so"
+python3 "$ROOT_DIR/scripts/patch-host-name.py" "$BIN_PATH" "$BUILD_DIR/apk/lib/arm64-v8a/libcodex.so"
+cp "$HOST_BIN_PATH" "$BUILD_DIR/apk/lib/arm64-v8a/libcode-mode-host.so"
+chmod 0755 "$BUILD_DIR/apk/lib/arm64-v8a/libcodex.so" "$BUILD_DIR/apk/lib/arm64-v8a/libcode-mode-host.so"
 cp "$BUILD_DIR/dex/classes.dex" "$BUILD_DIR/apk/classes.dex"
 cp "$ROOT_DIR/LICENSE-CODEX" "$BUILD_DIR/apk/assets/LICENSE-CODEX.txt"
 cp "$ROOT_DIR/vendor/licenses/TERMUX-LICENSE.md" "$BUILD_DIR/apk/assets/LICENSE-TERMUX.md"

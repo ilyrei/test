@@ -15,10 +15,10 @@ jobs:
       - name: Assemble and validate
         run: |
           mkdir -p assembled
-          cat distribution/codex-board.apk.part-00 distribution/codex-board.apk.part-01 > assembled/codex-board-v0.9-test.apk
+          cat distribution/codex-board.apk.part-00 distribution/codex-board.apk.part-01 distribution/codex-board.apk.part-02 > assembled/codex-board-v0.10-test.apk
           sha256sum --check distribution/codex-board.sha256
       - name: Publish private test release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create codex-board-v0.9-test assembled/codex-board-v0.9-test.apk --target "$GITHUB_SHA" --title "Codex Board v0.9 시험판" --notes "Adds direct terminal keyboard input, backspace and dark theme. Real-device input and sandbox behavior need verification." --prerelease
+          gh release create codex-board-v0.10-test assembled/codex-board-v0.10-test.apk --target "$GITHUB_SHA" --title "Codex Board v0.10 시험판" --notes "Packages the pinned code-mode host and adapts its name for Android. Real-device command execution and sandbox behavior still require verification." --prerelease
