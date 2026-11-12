@@ -41,7 +41,7 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
         getWindow().setStatusBarColor(Color.BLACK); getWindow().setNavigationBarColor(Color.BLACK);
         getWindow().getDecorView().setSystemUiVisibility(0);
         LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(Color.rgb(18,20,24));
-        status=new TextView(this); status.setText("Codex CLI — 시작 전"); status.setTextSize(16); root.addView(status);
+        status=new TextView(this); status.setText("Codex CLI v0.11 — 시작 전"); status.setTextSize(16); root.addView(status);
         HorizontalScrollView top=new HorizontalScrollView(this); LinearLayout buttons=new LinearLayout(this); top.addView(buttons); root.addView(top);
         button(buttons,"로그인·기존 대화",()->{if(session!=null&&session.isRunning()){status.setText("먼저 실행 중인 Codex를 중지하세요.");return;}startActivity(new Intent(this,ChatActivity.class));});
         button(buttons,"진단",()->{if(session!=null&&session.isRunning()){status.setText("먼저 실행 중인 Codex를 중지하세요.");return;}startActivity(new Intent(this,MainActivity.class));});
@@ -90,14 +90,15 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
             File home=new File(getFilesDir(),"home"), codex=new File(home,".codex"), tmp=new File(getCacheDir(),"tmp"), workspace=new File(getFilesDir(),"workspace");
             for(File dir:new File[]{home,codex,tmp,workspace})if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("작업 폴더 생성 실패");
             File cert=ChatActivity.writeSystemCertificates(this);
+            File tools=RuntimeTools.prepare(this);
             if(proxy!=null)proxy.close(); proxy=new LocalConnectProxy(true);
             String binary=new File(getApplicationInfo().nativeLibraryDir,"libcodex.so").getAbsolutePath();
             ArrayList<String> env=new ArrayList<>();
             for(Map.Entry<String,String> e:System.getenv().entrySet())env.add(e.getKey()+"="+e.getValue());
-            env.removeIf(s->s.startsWith("HOME=")||s.startsWith("CODEX_HOME=")||s.startsWith("TMPDIR=")||s.startsWith("TERM=")||s.startsWith("SHELL=")||s.startsWith("HTTPS_PROXY=")||s.startsWith("https_proxy=")||s.startsWith("SSL_CERT_FILE=")||s.startsWith("CODEX_CA_CERTIFICATE="));
-            env.add("HOME="+home); env.add("CODEX_HOME="+codex); env.add("TMPDIR="+tmp); env.add("TERM=xterm-256color"); env.add("SHELL=/system/bin/sh");
+            env.removeIf(s->s.startsWith("HOME=")||s.startsWith("CODEX_HOME=")||s.startsWith("TMPDIR=")||s.startsWith("TERM=")||s.startsWith("SHELL=")||s.startsWith("PATH=")||s.startsWith("HTTPS_PROXY=")||s.startsWith("https_proxy=")||s.startsWith("SSL_CERT_FILE=")||s.startsWith("CODEX_CA_CERTIFICATE="));
+            env.add("HOME="+home); env.add("CODEX_HOME="+codex); env.add("TMPDIR="+tmp); env.add("TERM=xterm-256color"); env.add("SHELL="+new File(tools,"bash")); env.add("PATH="+RuntimeTools.path(tools,System.getenv("PATH")));
             env.add("HTTPS_PROXY="+proxy.url()); env.add("https_proxy="+proxy.url()); env.add("SSL_CERT_FILE="+cert); env.add("CODEX_CA_CERTIFICATE="+cert);
-            String[] args=unrestricted?new String[]{"codex","--no-daemon","--dangerously-bypass-approvals-and-sandbox"}:new String[]{"codex","--no-daemon","--sandbox","workspace-write","--ask-for-approval","never"};
+            String[] args=unrestricted?new String[]{"codex","--no-daemon","-c","allow_login_shell=false","--dangerously-bypass-approvals-and-sandbox"}:new String[]{"codex","--no-daemon","-c","allow_login_shell=false","--sandbox","workspace-write","--ask-for-approval","never"};
             session=new TerminalSession(binary,workspace.getAbsolutePath(),args,env.toArray(new String[0]),2000,this);
             terminal.attachSession(session); terminal.requestFocus();
             status.setText(unrestricted?"Codex 실행 중 — 접근 제한 없음":"Codex 실행 중 — 보호 모드 (기기 호환성 시험 필요)");

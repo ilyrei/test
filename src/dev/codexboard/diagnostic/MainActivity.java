@@ -34,7 +34,7 @@ public final class MainActivity extends Activity {
         int p = (int)(16 * getResources().getDisplayMetrics().density);
         root.setPadding(p,p,p,p);
         TextView title = new TextView(this);
-        title.setText("Codex 칠판 v0.10 시험판"); title.setTextSize(24);
+        title.setText("Codex 칠판 v0.11 시험판"); title.setTextSize(24);
         root.addView(title);
         TextView explanation = new TextView(this);
         explanation.setText("공식 Codex 실행 파일과 이 기기의 기본 환경을 확인합니다. 로그인이나 질문 전송은 하지 않습니다.");
@@ -57,7 +57,7 @@ public final class MainActivity extends Activity {
     }
     private void log(String s) { main.post(() -> { report.append(s).append('\n'); output.setText(report.toString()); }); }
     private void diagnose() {
-        log("진단 앱 버전: 0.10");
+        log("진단 앱 버전: 0.11");
         log("Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
         log("CPU ABI: " + Arrays.toString(Build.SUPPORTED_ABIS));
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
@@ -81,6 +81,15 @@ public final class MainActivity extends Activity {
             if (!p.waitFor(15, TimeUnit.SECONDS)) { p.destroyForcibly(); log("코드 실행 호스트 확인: 시간 초과"); }
             else { String result=read.get(2,TimeUnit.SECONDS); log("코드 실행 호스트 확인: 종료 코드 " + p.exitValue() + (p.exitValue()==0 ? "" : "\n"+result)); }
         } catch (Exception e) { log("코드 실행 호스트 확인 실패: " + e.getClass().getSimpleName() + ": " + e.getMessage()); }
+        try {
+            File tools=RuntimeTools.prepare(this);
+            ProcessBuilder shell=new ProcessBuilder(new File(tools,"bash").getAbsolutePath(),"-c","set -e; printf 'bash: '; printf '%s\\n' \"$BASH_VERSION\"; printf 'pwd: '; pwd; rg --version").directory(getFilesDir()).redirectErrorStream(true);
+            shell.environment().put("PATH",RuntimeTools.path(tools,System.getenv("PATH")));
+            Process p=shell.start(); FutureTask<String> read=new FutureTask<>(()->readLimited(p.getInputStream()));
+            Thread t=new Thread(read,"shell-check-reader");t.setDaemon(true);t.start();
+            if(!p.waitFor(15,TimeUnit.SECONDS)){p.destroyForcibly();log("셸·검색 도구 확인: 시간 초과");}
+            else log("셸·검색 도구 확인: 종료 코드 "+p.exitValue()+"\n"+read.get(2,TimeUnit.SECONDS));
+        } catch(Exception e){log("셸·검색 도구 확인 실패: "+e.getClass().getSimpleName()+": "+e.getMessage());}
         try {
             Process p = prepareProcess(binary, "app-server").start();
             FutureTask<String> read = new FutureTask<>(() -> { BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream(),"UTF-8")); return b.readLine(); });
