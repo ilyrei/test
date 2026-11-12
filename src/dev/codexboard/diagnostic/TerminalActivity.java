@@ -13,6 +13,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
+import android.view.inputmethod.EditorInfo;
 import com.termux.terminal.TerminalSession;
 import com.termux.terminal.TerminalSessionClient;
 import com.termux.view.TerminalView;
@@ -28,6 +29,7 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
     private TerminalView terminal;
     private LocalConnectProxy proxy;
     private TextView status;
+    private EditText input;
     private boolean ctrl;
     private volatile boolean transferring;
 
@@ -44,18 +46,25 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
             .setPositiveButton("이해하고 시작",(d,w)->start(true)).setNegativeButton("취소",null).show());
         button(buttons,"가져오기",()->chooseFolder(101));
         button(buttons,"내보내기",()->chooseFolder(102));
-        button(buttons,"키보드",()->{terminal.requestFocus(); ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(terminal,InputMethodManager.SHOW_IMPLICIT);});
+        button(buttons,"키보드",this::showKeyboard);
         button(buttons,"Ctrl",()->{ctrl=!ctrl;status.setText(ctrl?"Ctrl: 다음 키에 적용":"Ctrl 해제");});
         button(buttons,"Esc",()->write("\u001b")); button(buttons,"Tab",()->write("\t"));
         button(buttons,"↑",()->write("\u001b[A")); button(buttons,"↓",()->write("\u001b[B"));
         button(buttons,"←",()->write("\u001b[D")); button(buttons,"→",()->write("\u001b[C"));
         button(buttons,"중지",()->{if(session!=null)session.finishIfRunning();});
-        terminal=new TerminalView(this,null); terminal.setTerminalViewClient(this);
+        terminal=new TerminalView(this,null); terminal.setFocusable(true); terminal.setFocusableInTouchMode(true); terminal.setTerminalViewClient(this);
         terminal.setTextSize((int)(16*getResources().getDisplayMetrics().scaledDensity));
-        root.addView(terminal,new LinearLayout.LayoutParams(-1,0,1)); setContentView(root);
+        root.addView(terminal,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout entry=new LinearLayout(this);
+        input=new EditText(this); input.setSingleLine(true); input.setTextSize(18); input.setHint("질문 또는 명령 입력"); input.setImeOptions(EditorInfo.IME_ACTION_SEND);
+        entry.addView(input,new LinearLayout.LayoutParams(0,-2,1)); Button submit=new Button(this); submit.setText("전송"); entry.addView(submit); root.addView(entry);
+        submit.setOnClickListener(v->sendInput()); input.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEND){sendInput();return true;}return false;});
+        setContentView(root);
     }
     private void button(LinearLayout parent,String label,Runnable action){Button b=new Button(this);b.setText(label);b.setOnClickListener(v->action.run());parent.addView(b);}
     private void write(String value){if(session!=null)session.write(value);}
+    private void showKeyboard(){input.requestFocus();input.post(()->((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(input,InputMethodManager.SHOW_IMPLICIT));}
+    private void sendInput(){if(session==null||!session.isRunning()){status.setText("먼저 Codex를 시작하세요.");return;}String value=input.getText().toString();write(value+"\r");input.setText("");}
     private void chooseFolder(int code){
         if(transferring||(session!=null&&session.isRunning())){status.setText("먼저 실행 중인 Codex와 파일 작업을 중지하세요.");return;}
         Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
@@ -80,7 +89,7 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
             env.removeIf(s->s.startsWith("HOME=")||s.startsWith("CODEX_HOME=")||s.startsWith("TMPDIR=")||s.startsWith("TERM=")||s.startsWith("SHELL=")||s.startsWith("HTTPS_PROXY=")||s.startsWith("https_proxy=")||s.startsWith("SSL_CERT_FILE=")||s.startsWith("CODEX_CA_CERTIFICATE="));
             env.add("HOME="+home); env.add("CODEX_HOME="+codex); env.add("TMPDIR="+tmp); env.add("TERM=xterm-256color"); env.add("SHELL=/system/bin/sh");
             env.add("HTTPS_PROXY="+proxy.url()); env.add("https_proxy="+proxy.url()); env.add("SSL_CERT_FILE="+cert); env.add("CODEX_CA_CERTIFICATE="+cert);
-            String[] args=unrestricted?new String[]{"codex","--dangerously-bypass-approvals-and-sandbox"}:new String[]{"codex","--sandbox","workspace-write","--ask-for-approval","never"};
+            String[] args=unrestricted?new String[]{"codex","--no-daemon","--dangerously-bypass-approvals-and-sandbox"}:new String[]{"codex","--no-daemon","--sandbox","workspace-write","--ask-for-approval","never"};
             session=new TerminalSession(binary,workspace.getAbsolutePath(),args,env.toArray(new String[0]),2000,this);
             terminal.attachSession(session); terminal.requestFocus();
             status.setText(unrestricted?"Codex 실행 중 — 접근 제한 없음":"Codex 실행 중 — 보호 모드 (기기 호환성 시험 필요)");
@@ -97,11 +106,11 @@ public final class TerminalActivity extends Activity implements TerminalSessionC
     @Override public void setTerminalShellPid(TerminalSession s,int pid){}
     @Override public Integer getTerminalCursorStyle(){return 0;}
     @Override public float onScale(float scale){return scale;}
-    @Override public void onSingleTapUp(MotionEvent e){terminal.requestFocus();((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(terminal,InputMethodManager.SHOW_IMPLICIT);}
+    @Override public void onSingleTapUp(MotionEvent e){showKeyboard();}
     @Override public boolean shouldBackButtonBeMappedToEscape(){return false;}
     @Override public boolean shouldEnforceCharBasedInput(){return false;}
     @Override public boolean shouldUseCtrlSpaceWorkaround(){return false;}
-    @Override public boolean isTerminalViewSelected(){return true;}
+    @Override public boolean isTerminalViewSelected(){return terminal!=null&&terminal.hasFocus();}
     @Override public void copyModeChanged(boolean b){}
     @Override public boolean onKeyDown(int keyCode,KeyEvent e,TerminalSession s){return false;}
     @Override public boolean onKeyUp(int keyCode,KeyEvent e){return false;}

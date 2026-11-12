@@ -15,10 +15,10 @@ jobs:
       - name: Assemble and validate
         run: |
           mkdir -p assembled
-          cat distribution/codex-board.apk.part-00 distribution/codex-board.apk.part-01 > assembled/codex-board-v0.7-test.apk
+          cat distribution/codex-board.apk.part-00 distribution/codex-board.apk.part-01 > assembled/codex-board-v0.8-test.apk
           sha256sum --check distribution/codex-board.sha256
       - name: Publish private test release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create codex-board-v0.7-test assembled/codex-board-v0.7-test.apk --target "$GITHUB_SHA" --title "Codex Board v0.7 시험판" --notes "Android 11 ARM64 terminal and file transfer test. Device compatibility and sandbox behavior are not yet verified." --prerelease
+          gh release create codex-board-v0.8-test assembled/codex-board-v0.8-test.apk --target "$GITHUB_SHA" --title "Codex Board v0.8 시험판" --notes "Fixes CLI startup and adds a keyboard input field. Device compatibility and sandbox behavior are not yet verified." --prerelease
